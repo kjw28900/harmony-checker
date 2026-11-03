@@ -222,7 +222,7 @@ export const RUNTIME = Object.freeze({
     'delay-unsupported': '과거 기준 소리와 비슷해 지연된 누출인지 구분하기 어려워 보류했어요',
     'reference-unavailable': '기준 정보가 부족해 보류했어요',
     uncertain: '신호·주기성 근거가 부족해 보류했어요',
-  })[reason] || (reason == null ? '보류 사유 없음' : '다른 근거가 부족해 보류했어요'),
+  })[reason] || (reason == null ? '없음 · 판별 중' : '다른 근거가 부족해 보류했어요'),
   micSettingsApplied: (settings = {}) => {
     const label = value => value === true ? '켬' : value === false ? '끔' : '확인되지 않음';
     return `브라우저 보고값: 에코 제거 ${label(settings.echoCancellation)} · 자동 음량 ${label(settings.autoGainControl)} · 잡음 억제 ${label(settings.noiseSuppression)}`;
