@@ -337,6 +337,8 @@ async function startLive() {
       const own = { ...pitch, time: Math.max(0, endTime - live.ring.length / SAMPLE_RATE / 2) };
       if (listeningMethod === 'speaker' && ['residual-insufficient', 'reference-overlap'].includes(own.reason)) live.referenceOnlySince ??= own.time;
       else live.referenceOnlySince = null;
+      if (listeningMethod === 'speaker' && ['lower-fundamental-ambiguous', 'delay-unsupported'].includes(own.reason)) live.ambiguousSince ??= own.time;
+      else live.ambiguousSince = null;
       const ref = nearestFrame(state.referenceFrames, own.time);
       const comparison = compareFrames(ref, own);
       live.history.push({ time: own.time, reference: ref?.midi, own: own.midi, frame: comparison });
@@ -444,6 +446,7 @@ function renderLive(frame, reference, own) {
   text('live-status', valid ? `${label} · ${verdict}` : RUNTIME.waiting);
   text('live-detail', valid ? RUNTIME.liveDetail(noteName(reference.midi), noteName(own.midi), deviation) : RUNTIME.clearVoices);
   if (!valid && state.live?.listeningMethod === 'speaker' && state.live.referenceOnlySince != null && own.time - state.live.referenceOnlySince >= 0.6) text('live-detail', COPY.speakerReferenceOnly);
+  if (!valid && state.live?.listeningMethod === 'speaker' && state.live.ambiguousSince != null && own.time - state.live.ambiguousSince >= 0.6) text('live-detail', COPY.speakerLiveHeld);
   $('live-status').dataset.status = status;
   drawMeter(valid ? frame.widthCents ?? deviation : null);
   drawLiveHistory();
@@ -476,8 +479,11 @@ function renderResults() {
     $('ratio-bar').append(bar);
     $('ratio-legend').append(element('span', `${statusLabel(key)} ${Math.round(percentage)}%`, `legend-item ${key}`));
   });
-  text('result-badge', normalized[3][1] / sum >= 0.5 ? RUNTIME.resultBadgeUnknown : RUNTIME.resultBadgeMeasured);
   const method = state.analysisMethod;
+  const unknownShare = normalized[3][1] / sum;
+  text('result-badge', unknownShare >= 0.5 ? (method === 'speaker' ? RUNTIME.speakerHeldBadge : RUNTIME.resultBadgeUnknown) : RUNTIME.resultBadgeMeasured);
+  if (method === 'speaker' && unknownShare >= 0.5) text('result-summary', RUNTIME.speakerHeldSummary);
+  else if (method === 'speaker' && unknownShare >= 0.2) text('result-summary', `${$('result-summary').textContent} ${RUNTIME.speakerHeldNote}`);
   $('result-listening-mode').hidden = method === 'file';
   text('result-listening-mode', method === 'speaker' ? COPY.speakerModeLabel : COPY.headphonesModeLabel);
   const ownOption = $('playback-source').querySelector('option[value="own"]');
