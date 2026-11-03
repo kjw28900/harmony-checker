@@ -1,0 +1,12 @@
+{
+  "name": "화음 체크",
+  "short_name": "화음 체크",
+  "description": "기준 녹음과 내 파트를 나란히 비교하는 노래 연습 도구",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f4ef",
+  "theme_color": "#f5f4ef",
+  "icons": [{ "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'none'; worker-src 'self'; img-src 'self' data:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f4ef">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="기준 녹음과 내 목소리의 음정 관계를 기기 안에서 비교하는 노래 연습 도구">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>화음 체크 · 함께 맞추는 소리</title>
+  <link rel="icon" type="image/svg+xml" href="./icon.svg">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./css/styles.css">
+  <script type="module" src="./js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">본문으로 건너뛰기</a>
+  <div class="app-shell">
+    <header class="app-header">
+      <button class="brand" type="button" data-action="home" aria-label="화음 체크 홈">
+        <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+        <span data-copy="appName">화음 체크</span>
+      </button>
+      <button class="text-button help-link" type="button" data-action="help" data-copy="helpLink">사용 방법 <span aria-hidden="true">↗</span></button>
+    </header>
+    <main id="main" tabindex="-1">
+      <section id="screen-home" class="screen home-screen" aria-labelledby="home-title">
+        <div class="intro">
+          <span class="eyebrow" data-copy="homeEyebrow">나란히 부르고, 차근히 맞춰요</span>
+          <h1 id="home-title" data-copy="homeTitle">우리의 소리 사이,<br>화음을 확인해요.</h1>
+          <p class="lead" data-copy="homeSubtitle">기준 녹음과 내 파트의 음정 간격을 비교해요.<br>다시 들어볼 구간과 화성 참고 의견을 함께 확인해요.</p>
+        </div>
+        <div class="mode-grid">
+          <button type="button" class="mode-card live-card" data-action="mode-live">
+            <span class="card-top"><span class="mode-icon" aria-hidden="true">◉</span><span class="card-kicker" data-copy="liveKicker">듣고 부르기</span></span>
+            <span class="card-heading" data-copy="liveTitle">실시간으로<br>연습하기</span>
+            <span class="card-description" data-copy="liveDescription">기준 녹음을 들으며 부르면 <br>지금의 음정 관계를 보여줘요.</span>
+            <span class="card-bottom"><span data-copy="liveBottom">이어폰과 마이크 준비</span><span class="card-arrow" aria-hidden="true">↗</span></span>
+          </button>
+          <button type="button" class="mode-card file-card" data-action="mode-file">
+            <span class="card-top"><span class="mode-icon" aria-hidden="true">≋</span><span class="card-kicker" data-copy="fileKicker">녹음 나란히 보기</span></span>
+            <span class="card-heading" data-copy="fileTitle">녹음 파일로<br>확인하기</span>
+            <span class="card-description" data-copy="fileDescription">파트별로 녹음한 두 파일에서 <br>다시 들어볼 구간을 찾아요.</span>
+            <span class="card-bottom"><span data-copy="fileBottom">기준 녹음 + 내 파트</span><span class="card-arrow" aria-hidden="true">↗</span></span>
+          </button>
+        </div>
+        <div class="privacy-note"><span class="privacy-icon" aria-hidden="true">◇</span><p data-copy="privacy">소리는 이 기기 안에서만 분석해요.<br>녹음 파일은 외부로 전송하거나 따로 저장하지 않아요.</p><span class="local-badge" data-copy="localBadge">기기 내 분석</span></div>
+        <p class="quiet-note" data-copy="scopeNote">한 파일에 한 목소리씩, 반주 없이 녹음하면 더 잘 알 수 있어요.</p>
+      </section>
+
+      <section id="screen-setup" class="screen" aria-labelledby="setup-title" hidden>
+        <button type="button" class="back-button" data-action="home" data-copy="backHome">← 처음으로</button>
+        <div class="section-heading"><span class="eyebrow" data-copy="setupEyebrow">소리 준비하기</span><h1 id="setup-title" data-copy="setupTitle">어떤 소리와<br>맞춰 볼까요?</h1><p data-copy="setupDescription">한 사람이 부른 기준 녹음을 골라 주세요.</p></div>
+        <div class="upload-stack">
+          <article class="panel upload-panel">
+            <div class="panel-heading"><span class="step-number">01</span><h2 data-copy="referenceLabel">기준 녹음</h2><span class="mini-tag" data-copy="required">필수</span></div>
+            <p class="input-help" data-copy="referenceHelp">멜로디나 다른 파트처럼, 함께 맞춰 볼 목소리예요.</p>
+            <label class="file-picker" for="reference-file"><span class="upload-symbol" aria-hidden="true">＋</span><span data-copy="pickReference">기준 녹음 선택</span><input id="reference-file" type="file" accept="audio/*,.m4a,.mp3,.wav,.aac"></label>
+            <div id="reference-name" class="file-name" aria-live="polite"></div><div id="reference-meta" class="file-meta"></div>
+            <canvas id="reference-wave" class="waveform" height="72" aria-label="기준 녹음 파형"></canvas>
+            <button id="reference-preview" type="button" class="button button-small button-secondary" disabled data-copy="preview">▶ 들어보기</button>
+          </article>
+          <article id="file-mode-fields" class="panel upload-panel" hidden>
+            <div class="panel-heading"><span class="step-number secondary-number">02</span><h2 data-copy="ownLabel">내 파트 녹음</h2><span class="mini-tag" data-copy="required">필수</span></div>
+            <p class="input-help" data-copy="ownHelp">기준과 같은 구간을 따로 부른 녹음을 골라 주세요.</p>
+            <label class="file-picker" for="own-file"><span class="upload-symbol" aria-hidden="true">＋</span><span data-copy="pickOwn">내 파트 선택</span><input id="own-file" type="file" accept="audio/*,.m4a,.mp3,.wav,.aac"></label>
+            <div id="own-name" class="file-name" aria-live="polite"></div><div id="own-meta" class="file-meta"></div>
+            <canvas id="own-wave" class="waveform" height="72" aria-label="내 파트 녹음 파형"></canvas>
+            <button id="own-preview" type="button" class="button button-small button-secondary" disabled data-copy="preview">▶ 들어보기</button>
+          </article>
+        </div>
+        <p class="quiet-note" data-copy="fileHint">m4a · mp3 · wav, 파일당 최대 5분. 음성 메모는 ‘공유 → 파일에 저장’ 후 선택해 주세요.</p>
+        <div id="live-mode-fields" hidden>
+          <div class="advice-panel"><span aria-hidden="true">◎</span><div><h2 data-copy="headphonesTitle">이어폰을 준비해 주세요</h2><p data-copy="headphonesBody">기준 소리가 마이크에 섞이지 않도록 이어폰으로 들어 주세요. 시작할 때 마이크 권한을 요청해요.</p></div></div>
+          <p class="quiet-note" data-copy="micPrivacy">마이크 소리는 이번 연습 중 메모리에만 남고, 새 분석이나 페이지 종료 시 버려져요.</p>
+          <button id="start-live" class="button button-primary button-full" type="button" disabled data-copy="startLive">마이크 허용하고 시작</button>
+        </div>
+        <button id="analyze-button" class="button button-primary button-full" type="button" disabled data-copy="analyze">두 녹음 분석하기</button>
+        <div id="progress-panel" class="panel progress-panel" role="status" hidden><div class="progress-heading"><strong id="progress-label" data-copy="analyzing">소리를 살펴보고 있어요</strong><button id="cancel-analysis" type="button" class="text-button" data-copy="cancel">취소</button></div><progress id="analysis-progress" max="1" value="0" aria-label="분석 진행률"></progress><p class="quiet-note" data-copy="progressHint">이 기기에서만 처리하고 있어요. 잠시 화면을 켜 두세요.</p></div>
+      </section>
+
+      <section id="screen-live" class="screen live-screen" aria-labelledby="live-title" hidden>
+        <div class="live-heading"><span class="eyebrow" id="live-title"><span class="recording-dot" aria-hidden="true"></span><span data-copy="liveEyebrow">지금 함께 맞추는 중</span></span><span id="live-time" class="timecode">0:00</span></div>
+        <div class="live-verdict"><p id="live-status" class="live-status" aria-live="polite" data-copy="waiting">소리를 기다리는 중</p><p id="live-detail" class="live-detail" data-copy="liveInstruction">기준 녹음을 들으며 편안하게 불러 주세요.</p></div>
+        <canvas id="live-meter" class="meter-canvas" width="640" height="340" aria-label="음정 간격 편차: 왼쪽은 좁음, 가운데는 맞음, 오른쪽은 넓음"></canvas>
+        <div class="meter-labels"><span data-copy="narrower">좁음</span><span data-copy="center">기준 간격</span><span data-copy="wider">넓음</span></div>
+        <div class="panel history-panel"><div class="panel-heading"><h2 data-copy="recentPitch">최근 소리 흐름</h2><span class="graph-key"><i class="line-key reference-line"></i><span data-copy="referenceShort">기준</span><i class="line-key own-line"></i><span data-copy="ownShort">내 파트</span></span></div><canvas id="live-history" class="history-canvas" height="130" aria-label="최근 기준과 내 목소리의 음높이 흐름"></canvas></div>
+        <p class="quiet-note" data-copy="liveCaution">음이 겹치거나 소리가 작으면 판별이 어려울 수 있어요.</p>
+        <div class="live-controls"><button id="stop-live" class="button button-stop button-full" type="button" data-copy="stopLive">■ 정지하고 결과 보기</button></div>
+      </section>
+
+      <section id="screen-results" class="screen" aria-labelledby="result-title" hidden>
+        <span class="eyebrow" id="result-title" data-copy="resultEyebrow">이번 연습의 기록</span>
+        <div class="result-heading"><span id="result-badge" class="status-badge">분석 결과</span><h1 id="result-summary">소리를 살펴봤어요.</h1><p class="quiet-note" data-copy="resultCaution">가장 가까운 반음 간격과 비교한 결과예요. 곡에 맞는 파트인지는 별도로 확인해 주세요.</p></div>
+        <div class="panel ratio-panel"><h2 data-copy="ratioTitle">두 소리의 간격은 어땠나요?</h2><div id="ratio-bar" class="ratio-bar" role="img" aria-label="판정별 구간 비율"></div><div id="ratio-legend" class="ratio-legend"></div></div>
+        <div class="panel graph-panel"><div class="panel-heading"><h2 data-copy="timelineTitle">소리 나란히 보기</h2><span class="graph-key"><i class="line-key reference-line"></i><span data-copy="referenceShort">기준</span><i class="line-key own-line"></i><span data-copy="ownShort">내 파트</span></span></div><p class="quiet-note" data-copy="timelineHint">그래프를 누르면 그 위치부터 다시 들을 수 있어요.</p><canvas id="result-graph" class="result-canvas" height="230" tabindex="0" aria-label="시간에 따른 기준과 내 파트의 음높이. 아래 재생 버튼으로도 들을 수 있어요."></canvas><div class="playback-controls"><label for="playback-source" class="sr-only" data-copy="listenSource">재생할 소리</label><select id="playback-source"><option value="both" data-copy="listenBoth">함께 듣기</option><option value="reference" data-copy="listenReference">기준만 듣기</option><option value="own" data-copy="listenOwn">내 파트만 듣기</option></select><button id="play-results" type="button" class="button button-small button-secondary" data-copy="play">▶ 재생</button><button id="stop-results" type="button" class="button button-small button-plain" data-copy="stop">■ 정지</button></div><details class="offset-details"><summary data-copy="offsetTitle">시간이 어긋나 보이면 조정</summary><p data-copy="offsetHelp">내 파트 시작 위치를 앞뒤로 맞춰 보세요. 양수는 내 파트를 늦추는 방향이에요.</p><div class="offset-row"><span>−2s</span><label class="sr-only" for="offset">내 파트 시간 정렬</label><input type="range" id="offset" min="-2" max="2" step="0.01" value="0"><span>+2s</span><output id="offset-value" for="offset">0.00초</output></div></details></div>
+        <div class="problem-section"><div class="section-line"><h2 data-copy="problemTitle">한 번 더 들어볼 구간</h2><span class="quiet-note" data-copy="problemLimit">최대 5개</span></div><div id="problem-list" class="problem-list"></div></div>
+        <details class="panel result-details"><summary><span data-copy="harmonyTitle">화성 참고 의견</span><span class="details-icon" aria-hidden="true">＋</span></summary><p class="reference-note" data-copy="harmonyNotice">참고 의견이에요. 장르와 의도에 따라 다를 수 있어요.</p><div id="harmony-content"></div></details>
+        <details class="panel result-details"><summary><span data-copy="detailsTitle">음정 수치 자세히</span><span class="details-icon" aria-hidden="true">＋</span></summary><div id="details-content"></div><p class="quiet-note" data-copy="centsHelp">100센트는 반음 하나예요. 판정 범위는 초기 설정이며, 실제 노래에서는 비브라토와 표현을 함께 고려해야 해요.</p></details>
+        <div class="result-actions"><button id="copy-result" type="button" class="button button-primary button-full" data-copy="copyResult">AI에게 물어보기용 복사</button><p id="copy-status" class="copy-status" role="status"></p><div class="secondary-actions"><button id="restart" type="button" class="button button-secondary" data-copy="restart">다시 하기</button><button type="button" class="button button-plain" data-action="home" data-copy="goHome">홈으로</button></div></div>
+      </section>
+
+      <section id="screen-help" class="screen" aria-labelledby="help-title" hidden>
+        <button type="button" class="back-button" data-action="home" data-copy="backHome">← 처음으로</button><div class="section-heading"><span class="eyebrow" data-copy="helpEyebrow">작은 연습 안내서</span><h1 id="help-title" data-copy="helpTitle">이렇게<br>사용해 보세요.</h1></div>
+        <div class="help-steps"><article class="panel"><span class="step-number">1</span><h2 data-copy="helpStep1Title">한 목소리씩 준비해요</h2><p data-copy="helpStep1Body">기준도 내 파트도, 한 사람이 반주 없이 부른 녹음을 사용해 주세요. 여러 사람이 함께 부른 파일을 목소리별로 나누는 기능은 아직 없어요.</p></article><article class="panel"><span class="step-number">2</span><h2 data-copy="helpStep2Title">같은 구간을 맞춰요</h2><p data-copy="helpStep2Body">파일 두 개는 같은 구간을 녹음해 주세요. 시작 시간이 조금 다르면 결과 화면의 시간 조정으로 맞출 수 있어요. 실시간 연습에서는 이어폰으로 기준 녹음을 들어 주세요.</p></article><article class="panel"><span class="step-number">3</span><h2 data-copy="helpStep3Title">결과를 듣고 확인해요</h2><p data-copy="helpStep3Body">‘맞음’은 두 음 사이 간격이 가장 가까운 평균율 반음 간격에 가깝다는 뜻이에요. 원하는 코드나 곡의 정답을 보장하지 않아요. 화성 의견은 클래식 화성학의 참고 관점으로 읽어 주세요.</p></article></div>
+        <div class="panel help-extra"><h2 data-copy="helpFilesTitle">아이폰에서 파일 고르기</h2><p data-copy="helpFilesBody">음성 메모에서 녹음을 선택하고 공유 → 파일에 저장을 누른 뒤, 이 앱의 파일 선택에서 불러오세요. m4a, mp3, wav를 우선 지원하며 기기의 디코더에 따라 열리지 않는 파일이 있을 수 있어요.</p><h2 data-copy="helpMicTitle">마이크가 작동하지 않나요?</h2><p data-copy="helpMicBody">HTTPS 주소 또는 이 기기의 localhost에서 열어야 해요. Safari의 사이트별 마이크 설정을 확인하고, 다른 녹음 앱을 닫은 뒤 다시 시도해 주세요. 아이폰의 설정 경로는 iOS 버전에 따라 다를 수 있어요.</p><h2 data-copy="helpPrivacyTitle">소리는 어디에 남나요?</h2><p data-copy="helpPrivacyBody">소리 분석은 기기 안에서만 처리해요. 녹음은 메모리에만 두고 새 분석이나 페이지 종료 시 버려요. ‘AI에게 물어보기용 복사’는 요약 텍스트만 복사하며, 다른 AI 앱에 붙여넣는 행동은 사용자가 선택해요.</p><h2 data-copy="helpLimitTitle">판별이 어려운 소리</h2><p data-copy="helpLimitBody">잡음, 잔향, 반주, 동시에 난 여러 음, 숨소리나 아주 작은 소리는 분석이 어려워요. 추정한 음높이가 한 옥타브 달라질 수도 있어요. 결과는 연습을 돕는 참고 자료로 사용해 주세요.</p></div>
+        <button type="button" data-action="home" class="button button-primary button-full" data-copy="goHome">홈으로</button>
+      </section>
+
+      <section id="screen-error" class="screen error-screen" aria-labelledby="error-title" hidden><div class="error-symbol" aria-hidden="true">!</div><span class="eyebrow" data-copy="errorEyebrow">잠깐 확인해 주세요</span><h1 id="error-title">분석을 시작하지 못했어요</h1><p id="error-message" class="lead"></p><button id="error-action" class="button button-primary button-full" type="button" data-copy="retry">다시 시도</button><button type="button" class="button button-plain button-full" data-action="home" data-copy="goHome">홈으로</button></section>
+    </main>
+    <footer class="app-footer"><span data-copy="footer">한 번의 연습, 조금 더 가까운 화음.</span><span class="footer-version">EARLY VERSION · 01</span></footer>
+  </div>
+  <noscript><p class="noscript-note">화음 체크를 사용하려면 브라우저의 JavaScript를 켜 주세요. 소리 분석은 이 기기에서 진행됩니다.</p></noscript>
+</body>
+</html>

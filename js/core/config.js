@@ -1,0 +1,21 @@
+// Initial thresholds are engineering hypotheses, not calibrated vocal accuracy claims.
+export const CONFIG = Object.freeze({
+  minFrequency: 70,
+  maxFrequency: 1100,
+  analysisSampleRate: 16000,
+  frameSize: 2048,
+  hopSeconds: 0.02,
+  minRms: 0.008,
+  minConfidence: 0.9,
+  yinThreshold: 0.1,
+  inTuneCents: 15,
+  nearCents: 35,
+  centsBoundaryEpsilon: 1e-8,
+  minSegmentSeconds: 0.12,
+  sustainedHarmonySeconds: 0.5,
+  maxDurationSeconds: 300,
+  minRecordingSeconds: 0.15,
+  keyMinDistinctNotes: 5,
+  keyMinCorrelation: 0.65,
+  keyMinMargin: 0.08,
+});
