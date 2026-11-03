@@ -115,6 +115,12 @@ function errorView(kind, message, action = () => show('setup')) {
   state.lastErrorAction = action;
   show('error');
 }
+// iOS Safari treats Web Audio as ambient sound by default, so the silent switch mutes it on the
+// built-in speaker. 'playback' lets previews and result playback sound like a media player; capture
+// goes back to 'auto' so WebKit can pick its own play-and-record session for the microphone.
+function setAudioSessionType(type) {
+  try { if (navigator.audioSession && navigator.audioSession.type !== type) navigator.audioSession.type = type; } catch {}
+}
 function ensureContext() {
   if (!state.context || state.context.state === 'closed') {
     const Context = window.AudioContext || window.webkitAudioContext;
@@ -183,6 +189,7 @@ async function preview(kind) {
   const request = state.playbackVersion;
   const isCurrent = () => generation === state.generation && request === state.playbackVersion && screen === state.screen && state[kind] === track;
   try {
+    setAudioSessionType('playback');
     const context = ensureContext();
     const resumed = context.resume();
     await resumed;
@@ -286,6 +293,7 @@ async function startLive() {
   }
   const token = ++state.generation;
   const listeningMethod = state.listeningMethod;
+  setAudioSessionType('auto');
   let context;
   try { context = ensureContext(); } catch (error) { return errorView('microphone', error.message); }
   // Invoke resume synchronously in this user gesture, before the permission await.
@@ -569,6 +577,7 @@ async function playResult(start = 0, duration) {
   const request = state.playbackVersion;
   const isCurrent = () => generation === state.generation && request === state.playbackVersion && screen === state.screen && state.reference === tracks.reference && state.own === tracks.own;
   try {
+    setAudioSessionType('playback');
     const context = ensureContext(); const resumed = context.resume(); await resumed;
     if (!isCurrent()) return;
     const kinds = selection === 'both' ? ['reference', 'own'] : [selection];
