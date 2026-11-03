@@ -22,6 +22,9 @@ export const SPEAKER_CONFIG = Object.freeze({
   maxHalfWindowDifferenceCents: 35,
   lowerFundamentalAmplitudeRatio: 0.008,
   lowerFundamentalAbsoluteAmplitude: 0.0005,
+  analysisTargetRms: 0.1,
+  maxNormalizationGain: 1024,
+  minimumInputRms: 1e-7,
 });
 
 const cents = (a, b) => 1200 * Math.log2(a / b);
@@ -156,19 +159,29 @@ function referenceCandidateEvidence(samples, sampleRate, context, frequency, win
 
 export function detectSpeakerPitch(input, inputRate, { referenceFrequencies = [], referencePresent = true, referenceContext = null, windowEndTime = null, requireReferenceEvidence = true, ...options } = {}) {
   const config = { ...SPEAKER_CONFIG, ...options };
-  const samples = inputRate > CONFIG.analysisSampleRate ? prepareSamples(input, inputRate) : input;
+  const rawSamples = inputRate > CONFIG.analysisSampleRate ? prepareSamples(input, inputRate) : input;
   const sampleRate = Math.min(inputRate, CONFIG.analysisSampleRate);
-  const rms = rmsOf(samples);
+  const inputRms = rmsOf(rawSamples);
+  let samples = rawSamples, rms = inputRms;
   const frequencies = referenceList(referenceFrequencies, config);
   const evidenceAvailable = referenceContext?.kind === 'speaker-reference-spectrum-v1' && Number.isFinite(windowEndTime);
-  const diagnostics = { referenceCount: frequencies.length, residualFraction: null, residualConfidence: 0, fundamentalFraction: null, halfWindowDifferenceCents: null, evidence: evidenceAvailable ? 'waveform-spectrum' : 'frequency-only', stage: null };
-  const unknown = (reason, confidence = 0) => ({ frequency: null, midi: null, voiced: false, confidence, rms, reason, diagnostics });
-  if (!samples?.length || !Number.isFinite(rms) || rms < CONFIG.minRms) return unknown('uncertain');
+  const diagnostics = { referenceCount: frequencies.length, residualFraction: null, residualConfidence: 0, fundamentalFraction: null, halfWindowDifferenceCents: null, evidence: evidenceAvailable ? 'waveform-spectrum' : 'frequency-only', stage: null, inputRms, rawResidualRms: null, normalizationGain: 1 };
+  const unknown = (reason, confidence = 0) => ({ frequency: null, midi: null, voiced: false, confidence, rms, inputRms, reason, diagnostics });
+  if (!samples?.length || !Number.isFinite(rms) || rms < config.minimumInputRms) { diagnostics.stage = 'input-silent'; return unknown('uncertain'); }
   if (!frequencies.length) {
     if (referencePresent) return unknown('reference-unavailable');
     const pitch = detectPitch(samples, sampleRate);
-    return { ...pitch, reason: pitch.voiced ? null : 'uncertain', diagnostics };
+    return { ...pitch, inputRms, reason: pitch.voiced ? null : 'uncertain', diagnostics };
   }
+  // Normalize only the analysis copy, never the recorded/playback PCM. Device
+  // capture gain must not change a speaker judgment when relative evidence is
+  // identical. Periodicity, residual fraction and spectral-source vetoes remain.
+  const normalizationGain = Math.min(config.maxNormalizationGain, config.analysisTargetRms / inputRms);
+  if (normalizationGain !== 1) {
+    samples = Float32Array.from(rawSamples, sample => sample * normalizationGain);
+    rms = rmsOf(samples);
+  }
+  diagnostics.normalizationGain = normalizationGain;
   if (requireReferenceEvidence && !evidenceAvailable) return unknown('reference-unavailable');
   let spectralComponents = null;
   if (evidenceAvailable) {
@@ -181,6 +194,7 @@ export function detectSpeakerPitch(input, inputRate, { referenceFrequencies = []
   if (frequencies.length > config.maxReferenceFrequencies) return unknown('uncertain');
   const residual = suppressKnownHarmonics(samples, sampleRate, frequencies, config, spectralComponents);
   const residualRms = rmsOf(residual);
+  diagnostics.rawResidualRms = residualRms / normalizationGain;
   diagnostics.residualFraction = residualRms * residualRms / (rms * rms);
   if (residualRms < CONFIG.minRms || diagnostics.residualFraction < config.minResidualEnergyFraction) return unknown('residual-insufficient');
   const pitch = detectPitch(residual, sampleRate, { minConfidence: config.minResidualConfidence, yinThreshold: 1 - config.minResidualConfidence });
@@ -204,7 +218,7 @@ export function detectSpeakerPitch(input, inputRate, { referenceFrequencies = []
   if (!first.voiced || !last.voiced) { diagnostics.stage = 'half-window-unvoiced'; return unknown('uncertain', pitch.confidence); }
   diagnostics.halfWindowDifferenceCents = Math.abs(cents(first.frequency, last.frequency));
   if (diagnostics.halfWindowDifferenceCents > config.maxHalfWindowDifferenceCents) { diagnostics.stage = 'half-window-disagreement'; return unknown('uncertain', pitch.confidence); }
-  return { ...pitch, rms: residualRms, reason: null, diagnostics };
+  return { ...pitch, rms: residualRms, inputRms, reason: null, diagnostics };
 }
 
 // windowEndTime is relative to reference playback start. Reference pitch frames

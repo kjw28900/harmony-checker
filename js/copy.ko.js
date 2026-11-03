@@ -39,6 +39,16 @@ export const COPY = Object.freeze({
   "headphonesModeLabel": "이어폰 모드",
   "fileModeLabel": "파일 두 개 비교",
   "speakerOwnPlayback": "내 녹음(기준 소리 포함)",
+  "soundCorrectionLabel": "소리 보정 켜기",
+  "soundCorrectionHelp": "에코 제거·자동 음량 조정을 브라우저에 요청해요. 실제 적용과 노래에 미치는 영향은 기기마다 달라요. 기본은 끔이며, 같은 구간을 켬·끔으로 비교해 보세요. 소리가 커지거나 판별이 좋아진다고 보장하지는 않아요.",
+  "inputLevelLabel": "입력 크기",
+  "holdReasonLabel": "지금 보류한 이유",
+  "copyDiagnostics": "진단 정보 복사",
+  "diagnosticsCopied": "진단 정보를 복사했어요. 확인받을 곳에 직접 붙여 넣어 주세요. 이 버튼은 외부로 전송하지 않아요.",
+  "diagnosticsFallback": "자동 복사를 사용할 수 없어요. 아래 진단 글자를 선택해 직접 복사해 주세요.",
+  "diagnosticsPrivacy": "진단에는 원본 소리·파일명·기기 식별자를 포함하지 않아요. 입력 수치와 처리 설정 등 진단 글자만 복사하며, 외부로 자동 전송하지 않아요. 복사한 글자는 앱을 닫아도 운영체제 클립보드에 남을 수 있어요.",
+  "micSettingsApplied": "브라우저가 보고한 마이크 설정",
+  "playbackNormalizationNotice": "내 녹음을 다시 들을 때만 재생 음량을 조절해요. 분석에 쓰는 원본 소리는 바꾸지 않으며, 잡음과 섞인 기준 소리도 함께 커질 수 있어요. 목소리만 분리하는 기능은 아니에요.",
   "speakerTip": "기준 소리는 작게 틀고, 내 목소리는 편안하게 들릴 만큼 불러 주세요. 같은 음·옥타브처럼 기준 소리와 구분하기 어려운 부분은 보류하도록 설계한 실험 기능이에요. 블루투스나 긴 잔향에서는 판별이 어렵거나 잘못된 결과가 나올 수 있어요. 정확히 불러도 결과가 비어 있으면 이어폰 모드나 녹음 파일 두 개 비교로 확인해 주세요.",
   "headphonesTip": "기준 소리가 마이크에 섞이지 않도록 이어폰으로 들어 주세요. 같은 음·옥타브도 비교할 수 있지만, 배음 오인이나 입력 상태에 따른 추정 오류는 생길 수 있어요.",
   "speakerLiveHeld": "지금 소리는 스피커에서 나온 기준 소리와 구분하기 어려워 판단을 보류하고 있어요. 정확히 부르고 있어도 그럴 수 있어요.",
@@ -197,6 +207,27 @@ export const COPY = Object.freeze({
 
 // Runtime text and formatters used by main.js. Values are inserted as text, never HTML.
 export const RUNTIME = Object.freeze({
+  levelDbfs: dbfs => dbfs === -Infinity ? '−∞ dBFS' : Number.isFinite(dbfs) ? `${dbfs > 0 ? '+' : ''}${dbfs.toFixed(1)} dBFS` : '측정값 없음',
+  energyRatio: ratio => Number.isFinite(ratio) && ratio >= 0 ? `${(ratio * 100).toFixed(1)}%` : '측정값 없음',
+  inputLevel: ({ dbfs, rms, peak, residualFraction } = {}) => {
+    const level = dbfs ?? (Number.isFinite(rms) && rms > 0 ? 20 * Math.log10(rms) : rms === 0 ? -Infinity : null);
+    const formatted = value => value === -Infinity ? '−∞ dBFS' : Number.isFinite(value) ? `${value > 0 ? '+' : ''}${value.toFixed(1)} dBFS` : '측정값 없음';
+    const peakLevel = Number.isFinite(peak) && peak > 0 ? 20 * Math.log10(peak) : peak === 0 ? -Infinity : null;
+    return `입력 ${formatted(level)}${peakLevel != null ? ` · 순간 최대 ${formatted(peakLevel)}` : ''}${Number.isFinite(residualFraction) && residualFraction >= 0 ? ` · 기준 성분 처리 후 남은 에너지 ${(residualFraction * 100).toFixed(1)}%` : ''}`;
+  },
+  holdReason: reason => ({
+    'residual-insufficient': '기준 성분을 줄인 뒤 남은 소리가 부족해 보류했어요',
+    'reference-overlap': '추정 후보가 기준 음·배음과 겹쳐 보류했어요',
+    'lower-fundamental-ambiguous': '더 낮은 기본음 가능성을 구분하기 어려워 보류했어요',
+    'delay-unsupported': '과거 기준 소리와 비슷해 지연된 누출인지 구분하기 어려워 보류했어요',
+    'reference-unavailable': '기준 정보가 부족해 보류했어요',
+    uncertain: '신호·주기성 근거가 부족해 보류했어요',
+  })[reason] || (reason == null ? '보류 사유 없음' : '다른 근거가 부족해 보류했어요'),
+  micSettingsApplied: (settings = {}) => {
+    const label = value => value === true ? '켬' : value === false ? '끔' : '확인되지 않음';
+    return `브라우저 보고값: 에코 제거 ${label(settings.echoCancellation)} · 자동 음량 ${label(settings.autoGainControl)} · 잡음 억제 ${label(settings.noiseSuppression)}`;
+  },
+  residualRatioNotice: '기준 성분을 줄이기 전후의 에너지를 비교한 참고값이에요. 남은 소리와 줄인 소리 모두 목소리·잡음이 섞일 수 있어 실제 내 목소리와 기준 소리의 비율을 뜻하지 않아요.',
   captureError: '마이크 소리를 받는 흐름이 중간에 멈췄어요. 다른 녹음 앱을 닫고 다시 시도하거나 ‘녹음 파일로 확인하기’를 이용해 주세요.',
   graphTime: seconds => `${seconds.toFixed(1)}초`,
   errorTitle: '소리를 확인할 수 없어요',

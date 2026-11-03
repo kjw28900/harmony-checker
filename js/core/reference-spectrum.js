@@ -115,7 +115,7 @@ export function recentReferenceComponents(context, endTime, { historySeconds = 1
   for (let index = latest; index >= 0 && context.frames[index].endTime >= endTime - historySeconds; index--) {
     const frame = context.frames[index];
     for (const peak of frame.peaks) {
-      if (peak.amplitude < Math.max(0.0001, frame.peaks[0].amplitude * 0.003)) continue;
+      if (peak.amplitude < frame.peaks[0].amplitude * 0.003) continue;
       if (!components.some(component => Math.abs(cents(component.frequency, peak.frequency)) < 5)) components.push(peak);
       if (components.length > maxComponents) return components;
     }

@@ -5,6 +5,7 @@ import { compareFrames, compareTracks } from './core/compare.js';
 import { noteName } from './core/music.js';
 import { CONFIG } from './core/config.js';
 import { SPEAKER_CONFIG, createSpeakerReference, detectSpeakerPitch, analyzeSpeakerSamples, referenceFrequenciesAt } from './core/speaker.js';
+import { measureLevel, levelDistribution, playbackGain, safeMicSettings, residualRatioSummary } from './core/input-level.js';
 
 const $ = id => document.getElementById(id);
 const SAMPLE_RATE = 16000;
@@ -15,7 +16,7 @@ const state = {
   result: null, context: null, playing: [], playbackTimer: null, worker: null,
   generation: 0, playbackVersion: 0, navigationVersion: 0, live: null, preview: null, offset: 0, lastErrorAction: null,
   screen: 'home', timing: [], fileTokens: { reference: 0, own: 0 }, reading: new Set(), preparing: false, pendingStream: null, rejectJob: null,
-  listeningMethod: 'speaker', analysisMethod: 'file',
+  listeningMethod: 'speaker', analysisMethod: 'file', soundCorrection: false, lastCapture: null,
 };
 const plain = (value, fallback = '') => typeof value === 'string' ? value : fallback;
 const copy = (key, fallback) => plain(key.split('.').reduce((v, k) => v?.[k], COPY), fallback);
@@ -69,10 +70,11 @@ function dispose() {
   state.ownFrames = [];
   state.result = null;
   state.analysisMethod = 'file';
-  state.offset = 0; state.timing = []; state.lastMicSettings = null;
+  state.offset = 0; state.timing = []; state.lastMicSettings = null; state.lastCapture = null;
   $('stop-live').disabled = false;
   text('copy-status', '');
   $('copy-fallback')?.remove();
+  $('diagnostics-fallback')?.remove(); text('diagnostics-status', '');
   ['reference-file', 'own-file'].forEach(id => { if ($(id)) $(id).value = ''; });
   text('reference-name', copy('noFile', COPY.noFile));
   text('own-name', copy('noFile', COPY.noFile));
@@ -96,6 +98,8 @@ function updateListeningMethod() {
   text('listening-hint', state.listeningMethod === 'speaker'
     ? `${COPY.speakerTip} ${RUNTIME.speakerDelayNotice(SPEAKER_CONFIG.maxDelaySeconds)}`
     : COPY.headphonesTip);
+  $('sound-correction-option').hidden = state.listeningMethod !== 'speaker';
+  $('sound-correction').checked = state.soundCorrection;
 }
 function updateButtons() {
   const busy = state.analyzing || Boolean(state.worker) || state.preparing || state.reading.size > 0;
@@ -106,6 +110,7 @@ function updateButtons() {
   $('reference-preview').disabled = !state.reference;
   $('own-preview').disabled = !state.own;
   document.querySelectorAll('input[name="listening-method"]').forEach(input => { input.disabled = busy || Boolean(state.live); });
+  $('sound-correction').disabled = busy || Boolean(state.live);
 }
 function errorView(kind, message, action = () => show('setup')) {
   stopPlayback();
@@ -286,6 +291,9 @@ function permissionError(error) {
   if (error.name === 'NotReadableError') return RUNTIME.micBusy;
   return error.message || RUNTIME.micFailed;
 }
+function microphoneSettings(stream) {
+  try { return safeMicSettings(stream.getAudioTracks()[0]?.getSettings?.() || {}); } catch { return {}; }
+}
 async function startLive() {
   if (!state.reference || state.live || state.preparing) return;
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
@@ -293,6 +301,8 @@ async function startLive() {
   }
   const token = ++state.generation;
   const listeningMethod = state.listeningMethod;
+  const soundCorrection = listeningMethod === 'speaker' && state.soundCorrection;
+  const requestedSettings = { channelCount: 1, echoCancellation: soundCorrection, noiseSuppression: false, autoGainControl: soundCorrection };
   setAudioSessionType('auto');
   let context;
   try { context = ensureContext(); } catch (error) { return errorView('microphone', error.message); }
@@ -304,7 +314,7 @@ async function startLive() {
   let stream;
   let live;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false }, video: false });
+    stream = await navigator.mediaDevices.getUserMedia({ audio: requestedSettings, video: false });
     if (token !== state.generation) { stream.getTracks().forEach(track => track.stop()); return; }
     state.pendingStream = stream;
     await resumed;
@@ -326,7 +336,7 @@ async function startLive() {
     const referenceSource = context.createBufferSource();
     referenceSource.buffer = audioBuffer(state.reference, context);
     referenceSource.connect(context.destination);
-    live = { stream, source, filter, worklet, mute, referenceSource, speakerReference, startTime, listeningMethod, referenceOnlySince: null, chunks: [], total: 0, ring: new Float32Array(2048), history: [], timings: [], finishing: false, resolveDone: null, raf: null, settings: stream.getAudioTracks()[0].getSettings() };
+    live = { stream, source, filter, worklet, mute, referenceSource, speakerReference, startTime, listeningMethod, soundCorrection, requestedSettings, inputRms: [], referenceOnlySince: null, chunks: [], total: 0, ring: new Float32Array(2048), history: [], timings: [], finishing: false, resolveDone: null, raf: null, settings: microphoneSettings(stream) };
     $('stop-live').disabled = false;
     state.live = live; state.preparing = false; state.pendingStream = null;
     worklet.port.onmessage = ({ data }) => {
@@ -334,6 +344,10 @@ async function startLive() {
       if (data.type === 'done') { live.resolveDone?.(); if (!live.finishing) finishLive(); return; }
       if (data.type !== 'samples') return;
       live.chunks.push(data.samples); live.total += data.samples.length;
+      const level = measureLevel(data.samples);
+      live.inputRms.push(level.rms);
+      $('live-input-meter').value = Math.max(-100, Math.min(0, level.dbfs ?? -100));
+      text('live-input-level', RUNTIME.levelDbfs(level.rms === 0 ? -Infinity : level.dbfs));
       if (data.samples.length >= live.ring.length) live.ring.set(data.samples.subarray(data.samples.length - live.ring.length));
       else { live.ring.copyWithin(0, data.samples.length); live.ring.set(data.samples, live.ring.length - data.samples.length); }
       if (live.total < live.ring.length) return;
@@ -375,6 +389,7 @@ async function startLive() {
     stream.getTracks().forEach(track => track.onended = () => { if (!live.finishing) finishLive(RUNTIME.micDisconnected); });
     $('progress-panel').hidden = true;
     text('live-status', RUNTIME.waiting);
+    text('live-hold-reason', RUNTIME.holdReason('reference-unavailable'));
     text('live-listening-mode', listeningMethod === 'speaker' ? COPY.speakerModeLabel : COPY.headphonesModeLabel);
     const caution = document.querySelector('[data-copy="liveCaution"]');
     if (caution) caution.textContent = listeningMethod === 'speaker' ? COPY.speakerLiveCaution : COPY.liveCaution;
@@ -428,7 +443,9 @@ async function finishLive(reason = '') {
   let position = 0;
   live.chunks.forEach(chunk => { samples.set(chunk, position); position += chunk.length; });
   state.timing = live.timings;
+  live.settings = microphoneSettings(live.stream);
   state.lastMicSettings = live.settings;
+  state.lastCapture = { listeningMethod: live.listeningMethod, soundCorrection: live.soundCorrection, requestedSettings: live.requestedSettings, appliedSettings: live.settings, inputLevels: levelDistribution(live.inputRms) };
   cleanupLive(live);
   $('stop-live').disabled = false;
   if (samples.length < SAMPLE_RATE * CONFIG.minRecordingSeconds) {
@@ -453,6 +470,7 @@ function renderLive(frame, reference, own) {
   const verdict = status === 'good' ? COPY.goodLive : status === 'near' ? (width >= 0 ? COPY.wideLive : COPY.narrowLive) : (width >= 0 ? COPY.wideOffLive : COPY.narrowOffLive);
   text('live-status', valid ? `${label} · ${verdict}` : RUNTIME.waiting);
   text('live-detail', valid ? RUNTIME.liveDetail(noteName(reference.midi), noteName(own.midi), deviation) : RUNTIME.clearVoices);
+  text('live-hold-reason', RUNTIME.holdReason(valid ? null : own.reason || 'uncertain'));
   if (!valid && state.live?.listeningMethod === 'speaker' && state.live.referenceOnlySince != null && own.time - state.live.referenceOnlySince >= 0.6) text('live-detail', COPY.speakerReferenceOnly);
   if (!valid && state.live?.listeningMethod === 'speaker' && state.live.ambiguousSince != null && own.time - state.live.ambiguousSince >= 0.6) text('live-detail', COPY.speakerLiveHeld);
   $('live-status').dataset.status = status;
@@ -488,6 +506,7 @@ function renderResults() {
     $('ratio-legend').append(element('span', `${statusLabel(key)} ${Math.round(percentage)}%`, `legend-item ${key}`));
   });
   const method = state.analysisMethod;
+  $('diagnostics-panel').hidden = method === 'file' || !state.lastCapture;
   const unknownShare = normalized[3][1] / sum;
   text('result-badge', unknownShare >= 0.5 ? (method === 'speaker' ? RUNTIME.speakerHeldBadge : RUNTIME.resultBadgeUnknown) : RUNTIME.resultBadgeMeasured);
   if (method === 'speaker' && unknownShare >= 0.5) text('result-summary', RUNTIME.speakerHeldSummary);
@@ -592,7 +611,10 @@ async function playResult(start = 0, duration) {
       const available = Math.min(length-delay, tracks[kind].duration-offset);
       if (available <= 0) return;
       const source = context.createBufferSource(); source.buffer = audioBuffer(tracks[kind], context);
-      const gain = context.createGain(); gain.gain.value = selection === 'both' ? 0.5 : 1;
+      const gain = context.createGain();
+      // The gain node changes listening loudness, never the samples used for analysis.
+      if (kind === 'own') tracks.own.playbackGain ??= playbackGain(tracks.own.samples);
+      gain.gain.value = (selection === 'both' ? 0.5 : 1) * (kind === 'own' ? tracks.own.playbackGain : 1);
       source.connect(gain).connect(context.destination);
       source.start(when+delay, offset, available); state.playing.push(source);
     });
@@ -608,6 +630,42 @@ function resultText() {
   const summary = $('result-summary').textContent;
   const intervals = $('details-content').textContent;
   return RUNTIME.resultText({ summary, ratios: $('ratio-legend').textContent, offset: state.offset, harmony: $('harmony-content').textContent, details: intervals, mode: state.analysisMethod });
+}
+function diagnosticData() {
+  const frames = state.ownFrames;
+  const capture = state.lastCapture;
+  return {
+    schema: 'harmony-input-diagnostics-v1',
+    device: { userAgent: navigator.userAgent, platform: navigator.platform, language: navigator.language },
+    listeningMethod: state.analysisMethod,
+    soundCorrectionRequested: capture?.soundCorrection ?? false,
+    microphone: {
+      requested: capture?.requestedSettings ?? null,
+      appliedReported: safeMicSettings(capture?.appliedSettings),
+      unreported: ['echoCancellation', 'autoGainControl', 'noiseSuppression'].filter(key => capture?.appliedSettings?.[key] === undefined),
+    },
+    inputLevels: capture?.inputLevels ?? null,
+    referenceLeakageProxy: { ...residualRatioSummary(frames), note: RUNTIME.residualRatioNotice },
+    holdReasons: frames.reduce((counts, frame) => { if (frame.reason) counts[frame.reason] = (counts[frame.reason] || 0) + 1; return counts; }, {}),
+    frameCounts: { total: frames.length, voiced: frames.filter(frame => frame.voiced).length },
+    sampleRates: { audioContext: state.context?.sampleRate, analysis: SAMPLE_RATE },
+    ownPlaybackGain: state.own ? (state.own.playbackGain ?? playbackGain(state.own.samples)) : null,
+  };
+}
+async function copyDiagnostics() {
+  if (!state.result || !state.lastCapture) return;
+  const content = JSON.stringify(diagnosticData(), null, 2);
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+    await navigator.clipboard.writeText(content);
+    $('diagnostics-fallback')?.remove();
+    text('diagnostics-status', COPY.diagnosticsCopied);
+  } catch {
+    let field = $('diagnostics-fallback');
+    if (!field) { field = element('textarea'); field.id = 'diagnostics-fallback'; field.rows = 8; field.setAttribute('aria-label', COPY.copyDiagnostics); $('diagnostics-status').after(field); }
+    field.value = content; field.focus(); field.select();
+    text('diagnostics-status', COPY.diagnosticsFallback);
+  }
 }
 async function copyResult() {
   if (!state.result) return;
@@ -702,6 +760,7 @@ document.querySelectorAll('input[name="listening-method"]').forEach(input => inp
   state.listeningMethod = input.value;
   updateListeningMethod();
 }));
+$('sound-correction').addEventListener('change', event => { state.soundCorrection = event.target.checked; });
 $('stop-live').addEventListener('click',()=>finishLive());
 $('play-results').addEventListener('click',()=>playResult());
 $('stop-results').addEventListener('click',stopPlayback);
@@ -709,6 +768,7 @@ $('playback-source').addEventListener('change',stopPlayback);
 $('offset').addEventListener('input',event=>{stopPlayback();state.offset=Number(event.target.value);updateResult();});
 $('result-graph').addEventListener('click',event=>{const rect=event.currentTarget.getBoundingClientRect();const ratio=Math.max(0,Math.min(1,(event.clientX-rect.left-43)/(rect.width-55)));playResult(ratio*Math.max(state.reference.duration,state.own.duration-state.offset));});
 $('copy-result').addEventListener('click',copyResult);
+$('copy-diagnostics').addEventListener('click', copyDiagnostics);
 $('restart').addEventListener('click',()=>{ state.navigationVersion++; chooseMode(state.mode); });
 $('error-action').addEventListener('click',()=>{ state.navigationVersion++; state.lastErrorAction?.(); });
 window.addEventListener('resize',redraw);
@@ -716,7 +776,7 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',redr
 document.querySelectorAll('details').forEach(node=>node.addEventListener('toggle',redraw));
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&state.live)finishLive(RUNTIME.backgrounded);});
 window.addEventListener('pagehide',()=>{ state.navigationVersion++; dispose(); });
-window.harmonyDiagnostics=()=>({sampleRate:state.context?.sampleRate,timings:state.timing,microphoneSettings:state.lastMicSettings,listeningMethod:state.live?.listeningMethod||state.analysisMethod,selectedListeningMethod:state.listeningMethod,speakerExclusions:state.ownFrames.reduce((counts,frame)=>{if(frame.reason)counts[frame.reason]=(counts[frame.reason]||0)+1;return counts;},{}),frameCounts:{reference:state.referenceFrames.length,own:state.ownFrames.length},microphoneActive:Boolean(state.live||state.pendingStream),screen:state.screen});
+window.harmonyDiagnostics=()=>({sampleRate:state.context?.sampleRate,timings:state.timing,microphoneSettings:state.lastMicSettings,listeningMethod:state.live?.listeningMethod||state.analysisMethod,selectedListeningMethod:state.listeningMethod,soundCorrectionRequested:state.live?.soundCorrection??state.lastCapture?.soundCorrection??false,capture:state.lastCapture,speakerExclusions:state.ownFrames.reduce((counts,frame)=>{if(frame.reason)counts[frame.reason]=(counts[frame.reason]||0)+1;return counts;},{}),frameCounts:{reference:state.referenceFrames.length,own:state.ownFrames.length},microphoneActive:Boolean(state.live||state.pendingStream),screen:state.screen,diagnosticData:state.lastCapture?diagnosticData():null});
 updateButtons();
 updateListeningMethod();
 redraw();
