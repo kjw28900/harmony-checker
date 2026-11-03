@@ -37,7 +37,7 @@
             <span class="card-top"><span class="mode-icon" aria-hidden="true">◉</span><span class="card-kicker" data-copy="liveKicker">듣고 부르기</span></span>
             <span class="card-heading" data-copy="liveTitle">실시간으로<br>연습하기</span>
             <span class="card-description" data-copy="liveDescription">기준 녹음을 들으며 부르면 <br>지금의 음정 관계를 보여줘요.</span>
-            <span class="card-bottom"><span data-copy="liveBottom">이어폰과 마이크 준비</span><span class="card-arrow" aria-hidden="true">↗</span></span>
+            <span class="card-bottom"><span data-copy="liveBottom">스피커 또는 이어폰으로</span><span class="card-arrow" aria-hidden="true">↗</span></span>
           </button>
           <button type="button" class="mode-card file-card" data-action="mode-file">
             <span class="card-top"><span class="mode-icon" aria-hidden="true">≋</span><span class="card-kicker" data-copy="fileKicker">녹음 나란히 보기</span></span>
@@ -73,8 +73,15 @@
         </div>
         <p class="quiet-note" data-copy="fileHint">m4a · mp3 · wav, 파일당 최대 5분. 음성 메모는 ‘공유 → 파일에 저장’ 후 선택해 주세요.</p>
         <div id="live-mode-fields" hidden>
-          <div class="advice-panel"><span aria-hidden="true">◎</span><div><h2 data-copy="headphonesTitle">이어폰을 준비해 주세요</h2><p data-copy="headphonesBody">기준 소리가 마이크에 섞이지 않도록 이어폰으로 들어 주세요. 시작할 때 마이크 권한을 요청해요.</p></div></div>
-          <p class="quiet-note" data-copy="micPrivacy">마이크 소리는 이번 연습 중 메모리에만 남고, 새 분석이나 페이지 종료 시 버려져요.</p>
+          <fieldset id="listening-method" class="listening-method" aria-describedby="listening-hint">
+            <legend data-copy="listeningTitle">기준 녹음을 어떻게 들을까요?</legend>
+            <div class="listening-options">
+              <label class="listening-option" for="listening-speaker"><input id="listening-speaker" type="radio" name="listening-method" value="speaker" checked><span data-copy="speakerLabel">스피커로 듣기</span><small data-copy="experimental">실험 기능</small></label>
+              <label class="listening-option" for="listening-headphones"><input id="listening-headphones" type="radio" name="listening-method" value="headphones"><span data-copy="headphonesLabel">이어폰으로 듣기</span></label>
+            </div>
+            <p id="listening-hint" class="listening-hint" data-copy="speakerTip">기준 소리는 작게, 기기는 입에서 한 뼘 이상 떨어뜨려 보세요. 이 버전은 기준 음·배음과 겹치는 후보를 제외하므로 같은 음·옥타브 부분은 판별이 어려울 수 있어요. 실제 기기 효과는 아직 확인하지 않았어요.</p>
+          </fieldset>
+          <p class="quiet-note" data-copy="micPrivacy">정지 후에도 결과를 다시 들을 수 있도록 소리를 메모리에 두어요. 홈·다시 하기·페이지 종료 시 앱의 녹음 참조를 해제해요.</p>
           <button id="start-live" class="button button-primary button-full" type="button" disabled data-copy="startLive">마이크 허용하고 시작</button>
         </div>
         <button id="analyze-button" class="button button-primary button-full" type="button" disabled data-copy="analyze">두 녹음 분석하기</button>
@@ -83,17 +90,18 @@
 
       <section id="screen-live" class="screen live-screen" aria-labelledby="live-title" hidden>
         <div class="live-heading"><span class="eyebrow" id="live-title"><span class="recording-dot" aria-hidden="true"></span><span data-copy="liveEyebrow">지금 함께 맞추는 중</span></span><span id="live-time" class="timecode">0:00</span></div>
+        <span id="live-listening-mode" class="listening-mode-badge" data-copy="speakerModeLabel">스피커 모드 · 실험</span>
         <div class="live-verdict"><p id="live-status" class="live-status" aria-live="polite" data-copy="waiting">소리를 기다리는 중</p><p id="live-detail" class="live-detail" data-copy="liveInstruction">기준 녹음을 들으며 편안하게 불러 주세요.</p></div>
         <canvas id="live-meter" class="meter-canvas" width="640" height="340" aria-label="음정 간격 편차: 왼쪽은 좁음, 가운데는 맞음, 오른쪽은 넓음"></canvas>
         <div class="meter-labels"><span data-copy="narrower">좁음</span><span data-copy="center">기준 간격</span><span data-copy="wider">넓음</span></div>
         <div class="panel history-panel"><div class="panel-heading"><h2 data-copy="recentPitch">최근 소리 흐름</h2><span class="graph-key"><i class="line-key reference-line"></i><span data-copy="referenceShort">기준</span><i class="line-key own-line"></i><span data-copy="ownShort">내 파트</span></span></div><canvas id="live-history" class="history-canvas" height="130" aria-label="최근 기준과 내 목소리의 음높이 흐름"></canvas></div>
-        <p class="quiet-note" data-copy="liveCaution">음이 겹치거나 소리가 작으면 판별이 어려울 수 있어요.</p>
+        <p id="live-caution" class="quiet-note" data-copy="liveCaution">음이 겹치거나 소리가 작으면 판별이 어려울 수 있어요.</p>
         <div class="live-controls"><button id="stop-live" class="button button-stop button-full" type="button" data-copy="stopLive">■ 정지하고 결과 보기</button></div>
       </section>
 
       <section id="screen-results" class="screen" aria-labelledby="result-title" hidden>
         <span class="eyebrow" id="result-title" data-copy="resultEyebrow">이번 연습의 기록</span>
-        <div class="result-heading"><span id="result-badge" class="status-badge">분석 결과</span><h1 id="result-summary">소리를 살펴봤어요.</h1><p class="quiet-note" data-copy="resultCaution">가장 가까운 반음 간격과 비교한 결과예요. 곡에 맞는 파트인지는 별도로 확인해 주세요.</p></div>
+        <div class="result-heading"><div class="result-badges"><span id="result-badge" class="status-badge">분석 결과</span><span id="result-listening-mode" class="listening-mode-badge" hidden></span></div><h1 id="result-summary">소리를 살펴봤어요.</h1><p class="quiet-note" data-copy="resultCaution">가장 가까운 반음 간격과 비교한 결과예요. 곡에 맞는 파트인지는 별도로 확인해 주세요.</p></div>
         <div class="panel ratio-panel"><h2 data-copy="ratioTitle">두 소리의 간격은 어땠나요?</h2><div id="ratio-bar" class="ratio-bar" role="img" aria-label="판정별 구간 비율"></div><div id="ratio-legend" class="ratio-legend"></div></div>
         <div class="panel graph-panel"><div class="panel-heading"><h2 data-copy="timelineTitle">소리 나란히 보기</h2><span class="graph-key"><i class="line-key reference-line"></i><span data-copy="referenceShort">기준</span><i class="line-key own-line"></i><span data-copy="ownShort">내 파트</span></span></div><p class="quiet-note" data-copy="timelineHint">그래프를 누르면 그 위치부터 다시 들을 수 있어요.</p><canvas id="result-graph" class="result-canvas" height="230" tabindex="0" aria-label="시간에 따른 기준과 내 파트의 음높이. 아래 재생 버튼으로도 들을 수 있어요."></canvas><div class="playback-controls"><label for="playback-source" class="sr-only" data-copy="listenSource">재생할 소리</label><select id="playback-source"><option value="both" data-copy="listenBoth">함께 듣기</option><option value="reference" data-copy="listenReference">기준만 듣기</option><option value="own" data-copy="listenOwn">내 파트만 듣기</option></select><button id="play-results" type="button" class="button button-small button-secondary" data-copy="play">▶ 재생</button><button id="stop-results" type="button" class="button button-small button-plain" data-copy="stop">■ 정지</button></div><details class="offset-details"><summary data-copy="offsetTitle">시간이 어긋나 보이면 조정</summary><p data-copy="offsetHelp">내 파트 시작 위치를 앞뒤로 맞춰 보세요. 양수는 내 파트를 늦추는 방향이에요.</p><div class="offset-row"><span>−2s</span><label class="sr-only" for="offset">내 파트 시간 정렬</label><input type="range" id="offset" min="-2" max="2" step="0.01" value="0"><span>+2s</span><output id="offset-value" for="offset">0.00초</output></div></details></div>
         <div class="problem-section"><div class="section-line"><h2 data-copy="problemTitle">한 번 더 들어볼 구간</h2><span class="quiet-note" data-copy="problemLimit">최대 5개</span></div><div id="problem-list" class="problem-list"></div></div>
@@ -104,8 +112,8 @@
 
       <section id="screen-help" class="screen" aria-labelledby="help-title" hidden>
         <button type="button" class="back-button" data-action="home" data-copy="backHome">← 처음으로</button><div class="section-heading"><span class="eyebrow" data-copy="helpEyebrow">작은 연습 안내서</span><h1 id="help-title" data-copy="helpTitle">이렇게<br>사용해 보세요.</h1></div>
-        <div class="help-steps"><article class="panel"><span class="step-number">1</span><h2 data-copy="helpStep1Title">한 목소리씩 준비해요</h2><p data-copy="helpStep1Body">기준도 내 파트도, 한 사람이 반주 없이 부른 녹음을 사용해 주세요. 여러 사람이 함께 부른 파일을 목소리별로 나누는 기능은 아직 없어요.</p></article><article class="panel"><span class="step-number">2</span><h2 data-copy="helpStep2Title">같은 구간을 맞춰요</h2><p data-copy="helpStep2Body">파일 두 개는 같은 구간을 녹음해 주세요. 시작 시간이 조금 다르면 결과 화면의 시간 조정으로 맞출 수 있어요. 실시간 연습에서는 이어폰으로 기준 녹음을 들어 주세요.</p></article><article class="panel"><span class="step-number">3</span><h2 data-copy="helpStep3Title">결과를 듣고 확인해요</h2><p data-copy="helpStep3Body">‘맞음’은 두 음 사이 간격이 가장 가까운 평균율 반음 간격에 가깝다는 뜻이에요. 원하는 코드나 곡의 정답을 보장하지 않아요. 화성 의견은 클래식 화성학의 참고 관점으로 읽어 주세요.</p></article></div>
-        <div class="panel help-extra"><h2 data-copy="helpFilesTitle">아이폰에서 파일 고르기</h2><p data-copy="helpFilesBody">음성 메모에서 녹음을 선택하고 공유 → 파일에 저장을 누른 뒤, 이 앱의 파일 선택에서 불러오세요. m4a, mp3, wav를 우선 지원하며 기기의 디코더에 따라 열리지 않는 파일이 있을 수 있어요.</p><h2 data-copy="helpMicTitle">마이크가 작동하지 않나요?</h2><p data-copy="helpMicBody">HTTPS 주소 또는 이 기기의 localhost에서 열어야 해요. Safari의 사이트별 마이크 설정을 확인하고, 다른 녹음 앱을 닫은 뒤 다시 시도해 주세요. 아이폰의 설정 경로는 iOS 버전에 따라 다를 수 있어요.</p><h2 data-copy="helpPrivacyTitle">소리는 어디에 남나요?</h2><p data-copy="helpPrivacyBody">소리 분석은 기기 안에서만 처리해요. 녹음은 메모리에만 두고 새 분석이나 페이지 종료 시 버려요. ‘AI에게 물어보기용 복사’는 요약 텍스트만 복사하며, 다른 AI 앱에 붙여넣는 행동은 사용자가 선택해요.</p><h2 data-copy="helpLimitTitle">판별이 어려운 소리</h2><p data-copy="helpLimitBody">잡음, 잔향, 반주, 동시에 난 여러 음, 숨소리나 아주 작은 소리는 분석이 어려워요. 추정한 음높이가 한 옥타브 달라질 수도 있어요. 결과는 연습을 돕는 참고 자료로 사용해 주세요.</p></div>
+        <div class="help-steps"><article class="panel"><span class="step-number">1</span><h2 data-copy="helpStep1Title">한 목소리씩 준비해요</h2><p data-copy="helpStep1Body">기준도 내 파트도, 한 사람이 반주 없이 부른 녹음을 사용해 주세요. 여러 사람이 함께 부른 파일을 목소리별로 나누는 기능은 아직 없어요.</p></article><article class="panel"><span class="step-number">2</span><h2 data-copy="helpStep2Title">같은 구간을 맞춰요</h2><p data-copy="helpStep2Body">파일로 확인할 때는 같은 구간을 부른 두 녹음을 준비해 주세요. 실시간 연습은 스피커 또는 이어폰으로 들을 수 있어요. 스피커는 두 소리가 섞이는 실험 기능이라 판별 어려움이 늘 수 있어요. 결과의 ‘내 녹음’ 재생에도 마이크에 들어온 기준 소리가 함께 남으며, 목소리만 분리해 재생하지는 않아요.</p></article><article class="panel"><span class="step-number">3</span><h2 data-copy="helpStep3Title">결과를 듣고 확인해요</h2><p data-copy="helpStep3Body">‘맞음’은 두 음 사이 간격이 가장 가까운 평균율 반음 간격에 가깝다는 뜻이에요. 원하는 코드나 곡의 정답을 보장하지 않아요. 화성 의견은 클래식 화성학의 참고 관점으로 읽어 주세요.</p></article></div>
+        <div class="panel help-extra"><h2 data-copy="helpFilesTitle">아이폰에서 파일 고르기</h2><p data-copy="helpFilesBody">음성 메모에서 녹음을 선택하고 공유 → 파일에 저장을 누른 뒤, 이 앱의 파일 선택에서 불러오세요. m4a, mp3, wav를 우선 지원하며 기기의 디코더에 따라 열리지 않는 파일이 있을 수 있어요.</p><h2 data-copy="helpMicTitle">마이크가 작동하지 않나요?</h2><p data-copy="helpMicBody">HTTPS 주소 또는 이 기기의 localhost에서 열어야 해요. Safari의 사이트별 마이크 설정을 확인하고, 다른 녹음 앱을 닫은 뒤 다시 시도해 주세요. 아이폰의 설정 경로는 iOS 버전에 따라 다를 수 있어요.</p><h2 data-copy="helpPrivacyTitle">소리는 어디에 남나요?</h2><p data-copy="helpPrivacyBody">모든 소리 분석은 이 기기 안에서만 처리해요. 정지 후에는 결과 재생을 위해 녹음을 메모리에 두고, 홈·다시 하기·페이지 종료 시 앱의 녹음 참조를 해제해요. 브라우저의 실제 메모리 회수 시점은 달라질 수 있어요. AI용 복사는 원본과 파일명을 제외한 결과 글자만 복사하며, 클립보드는 앱을 닫아도 운영체제에 남을 수 있어요.</p><h2 data-copy="helpLimitTitle">판별이 어려운 소리</h2><p data-copy="helpLimitBody">소음·잔향·반주·여러 목소리·숨소리나 작은 소리는 분석하기 어려워요. 기본음이 약하고 배음이 강하면 한 옥타브 또는 3배 주파수의 음을 원래 음으로 잘못 고를 수 있어요. 이때 신뢰도가 높아 보여도 간격과 화성 해석이 틀릴 수 있어요. 이 배음 오인에 대한 알고리즘 개선은 아직 검증하지 않았고, 실제 사람 노래의 정확도도 시험하지 않았어요.</p></div>
         <button type="button" data-action="home" class="button button-primary button-full" data-copy="goHome">홈으로</button>
       </section>
 

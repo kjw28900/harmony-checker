@@ -4,6 +4,7 @@ import { analyzeSamples } from './core/analysis.js';
 import { compareFrames, compareTracks } from './core/compare.js';
 import { noteName } from './core/music.js';
 import { CONFIG } from './core/config.js';
+import { detectSpeakerPitch, analyzeSpeakerSamples, referenceFrequenciesAt } from './core/speaker.js';
 
 const $ = id => document.getElementById(id);
 const SAMPLE_RATE = 16000;
@@ -14,6 +15,7 @@ const state = {
   result: null, context: null, playing: [], playbackTimer: null, worker: null,
   generation: 0, playbackVersion: 0, navigationVersion: 0, live: null, preview: null, offset: 0, lastErrorAction: null,
   screen: 'home', timing: [], fileTokens: { reference: 0, own: 0 }, reading: new Set(), preparing: false, pendingStream: null, rejectJob: null,
+  listeningMethod: 'speaker', analysisMethod: 'file',
 };
 const plain = (value, fallback = '') => typeof value === 'string' ? value : fallback;
 const copy = (key, fallback) => plain(key.split('.').reduce((v, k) => v?.[k], COPY), fallback);
@@ -66,6 +68,7 @@ function dispose() {
   state.referenceFrames = [];
   state.ownFrames = [];
   state.result = null;
+  state.analysisMethod = 'file';
   state.offset = 0; state.timing = []; state.lastMicSettings = null;
   $('stop-live').disabled = false;
   text('copy-status', '');
@@ -85,7 +88,12 @@ function chooseMode(mode) {
   $('file-mode-fields').hidden = mode !== 'file';
   $('live-mode-fields').hidden = mode !== 'live';
   $('analyze-button').hidden = mode === 'live';
+  updateListeningMethod();
   show('setup');
+}
+function updateListeningMethod() {
+  document.querySelectorAll('input[name="listening-method"]').forEach(input => { input.checked = input.value === state.listeningMethod; });
+  text('listening-hint', state.listeningMethod === 'speaker' ? COPY.speakerTip : COPY.headphonesTip);
 }
 function updateButtons() {
   const busy = state.analyzing || Boolean(state.worker) || state.preparing || state.reading.size > 0;
@@ -95,6 +103,7 @@ function updateButtons() {
   $('own-file').disabled = state.analyzing || Boolean(state.worker) || state.preparing;
   $('reference-preview').disabled = !state.reference;
   $('own-preview').disabled = !state.own;
+  document.querySelectorAll('input[name="listening-method"]').forEach(input => { input.disabled = busy || Boolean(state.live); });
 }
 function errorView(kind, message, action = () => show('setup')) {
   stopPlayback();
@@ -196,6 +205,8 @@ async function analyzePair() {
   if (!state.reference || !state.own) return;
   stopPlayback();
   const token = ++state.generation;
+  const listeningMethod = state.own.listeningMethod || 'file';
+  state.analysisMethod = listeningMethod;
   state.analyzing = true;
   $('copy-fallback')?.remove(); text('copy-status', '');
   updateButtons();
@@ -220,14 +231,17 @@ async function analyzePair() {
         worker.onerror = event => reject(new Error(event.message || 'Worker unavailable'));
         const reference = state.reference.samples.slice();
         const own = state.own.samples.slice();
-        worker.postMessage({ type: 'analyze', reference, own, sampleRate: SAMPLE_RATE }, [reference.buffer, own.buffer]);
+        worker.postMessage({ type: 'analyze', reference, own, sampleRate: SAMPLE_RATE, listeningMethod }, [reference.buffer, own.buffer]);
       });
     } catch (error) {
       if (token !== state.generation) return;
       if (state.worker) { state.worker.terminate(); state.worker = null; }
       const signal = { get aborted() { return token !== state.generation; } };
       const reference = await analyzeSamples(state.reference.samples, SAMPLE_RATE, { signal, onProgress: p => setProgress(p / 2) });
-      const own = await analyzeSamples(state.own.samples, SAMPLE_RATE, { signal, onProgress: p => setProgress(0.5 + p / 2) });
+      const options = { signal, onProgress: p => setProgress(0.5 + p / 2) };
+      const own = listeningMethod === 'speaker'
+        ? await analyzeSpeakerSamples(state.own.samples, SAMPLE_RATE, reference, options)
+        : await analyzeSamples(state.own.samples, SAMPLE_RATE, options);
       tracks = { reference, own };
     }
     if (token !== state.generation) return;
@@ -269,6 +283,7 @@ async function startLive() {
     return errorView('secure', RUNTIME.secureError);
   }
   const token = ++state.generation;
+  const listeningMethod = state.listeningMethod;
   let context;
   try { context = ensureContext(); } catch (error) { return errorView('microphone', error.message); }
   // Invoke resume synchronously in this user gesture, before the permission await.
@@ -300,7 +315,7 @@ async function startLive() {
     const referenceSource = context.createBufferSource();
     referenceSource.buffer = audioBuffer(state.reference, context);
     referenceSource.connect(context.destination);
-    live = { stream, source, filter, worklet, mute, referenceSource, startTime, chunks: [], total: 0, ring: new Float32Array(2048), history: [], timings: [], finishing: false, resolveDone: null, raf: null, settings: stream.getAudioTracks()[0].getSettings() };
+    live = { stream, source, filter, worklet, mute, referenceSource, startTime, listeningMethod, referenceOnlySince: null, chunks: [], total: 0, ring: new Float32Array(2048), history: [], timings: [], finishing: false, resolveDone: null, raf: null, settings: stream.getAudioTracks()[0].getSettings() };
     $('stop-live').disabled = false;
     state.live = live; state.preparing = false; state.pendingStream = null;
     worklet.port.onmessage = ({ data }) => {
@@ -312,7 +327,13 @@ async function startLive() {
       else { live.ring.copyWithin(0, data.samples.length); live.ring.set(data.samples, live.ring.length - data.samples.length); }
       if (live.total < live.ring.length) return;
       const receivedAt = performance.now();
-      const own = { ...detectPitch(live.ring, SAMPLE_RATE), time: Math.max(0, data.endTime - startTime - live.ring.length / SAMPLE_RATE / 2) };
+      const endTime = data.endTime - startTime;
+      const pitch = listeningMethod === 'speaker'
+        ? detectSpeakerPitch(live.ring, SAMPLE_RATE, { referenceFrequencies: referenceFrequenciesAt(state.referenceFrames, endTime) })
+        : detectPitch(live.ring, SAMPLE_RATE);
+      const own = { ...pitch, time: Math.max(0, endTime - live.ring.length / SAMPLE_RATE / 2) };
+      if (listeningMethod === 'speaker' && ['reference-only', 'reference-overlap'].includes(own.reason)) live.referenceOnlySince ??= own.time;
+      else live.referenceOnlySince = null;
       const ref = nearestFrame(state.referenceFrames, own.time);
       const comparison = compareFrames(ref, own);
       live.history.push({ time: own.time, reference: ref?.midi, own: own.midi, frame: comparison });
@@ -341,6 +362,9 @@ async function startLive() {
     stream.getTracks().forEach(track => track.onended = () => { if (!live.finishing) finishLive(RUNTIME.micDisconnected); });
     $('progress-panel').hidden = true;
     text('live-status', RUNTIME.waiting);
+    text('live-listening-mode', listeningMethod === 'speaker' ? COPY.speakerModeLabel : COPY.headphonesModeLabel);
+    const caution = document.querySelector('[data-copy="liveCaution"]');
+    if (caution) caution.textContent = listeningMethod === 'speaker' ? COPY.speakerLiveCaution : COPY.liveCaution;
     show('live');
     function tick() {
       if (state.live !== live) return;
@@ -398,7 +422,7 @@ async function finishLive(reason = '') {
     errorView('silence', RUNTIME.tooShort(CONFIG.minRecordingSeconds));
     return;
   }
-  state.own = { name: RUNTIME.takeName, duration: samples.length / SAMPLE_RATE, samples, buffer: null };
+  state.own = { name: RUNTIME.takeName, duration: samples.length / SAMPLE_RATE, samples, buffer: null, listeningMethod: live.listeningMethod };
   text('own-name', RUNTIME.takeName);
   text('own-meta', RUNTIME.takeMeta(timeLabel(state.own.duration)));
   await analyzePair();
@@ -415,6 +439,7 @@ function renderLive(frame, reference, own) {
   const verdict = status === 'good' ? COPY.goodLive : status === 'near' ? (width >= 0 ? COPY.wideLive : COPY.narrowLive) : (width >= 0 ? COPY.wideOffLive : COPY.narrowOffLive);
   text('live-status', valid ? `${label} · ${verdict}` : RUNTIME.waiting);
   text('live-detail', valid ? RUNTIME.liveDetail(noteName(reference.midi), noteName(own.midi), deviation) : RUNTIME.clearVoices);
+  if (!valid && state.live?.listeningMethod === 'speaker' && state.live.referenceOnlySince != null && own.time - state.live.referenceOnlySince >= 0.6) text('live-detail', COPY.speakerReferenceOnly);
   $('live-status').dataset.status = status;
   drawMeter(valid ? frame.widthCents ?? deviation : null);
   drawLiveHistory();
@@ -448,6 +473,11 @@ function renderResults() {
     $('ratio-legend').append(element('span', `${statusLabel(key)} ${Math.round(percentage)}%`, `legend-item ${key}`));
   });
   text('result-badge', normalized[3][1] / sum >= 0.5 ? RUNTIME.resultBadgeUnknown : RUNTIME.resultBadgeMeasured);
+  const method = state.analysisMethod;
+  $('result-listening-mode').hidden = method === 'file';
+  text('result-listening-mode', method === 'speaker' ? COPY.speakerModeLabel : COPY.headphonesModeLabel);
+  const ownOption = $('playback-source').querySelector('option[value="own"]');
+  if (ownOption) ownOption.textContent = method === 'speaker' ? COPY.speakerOwnPlayback : COPY.listenOwn;
   renderSegments(result.segments || []);
   renderHarmony(result.harmony);
   renderDetails(result.intervalStats);
@@ -492,6 +522,16 @@ function renderDetails(stats) {
   const node = $('details-content'); node.replaceChildren();
   node.append(element('p', RUNTIME.detailsScale));
   node.append(element('p', RUNTIME.detailsNotice));
+  if (state.analysisMethod === 'speaker') {
+    const frames = state.ownFrames;
+    const count = reason => frames.filter(frame => frame.reason === reason).length;
+    node.prepend(element('p', COPY.speakerResultNotice), element('p', RUNTIME.speakerDetails({
+      totalFrames: frames.length,
+      overlapFrames: count('reference-overlap'),
+      referenceOnlyFrames: count('reference-only'),
+      uncertainFrames: count('uncertain'),
+    })));
+  }
   const values = Array.isArray(stats) ? stats : Object.values(stats || {});
   if (values.length) {
     const table = element('table');
@@ -547,7 +587,7 @@ function resultText() {
   const result = state.result;
   const summary = $('result-summary').textContent;
   const intervals = $('details-content').textContent;
-  return RUNTIME.resultText({ summary, ratios: $('ratio-legend').textContent, offset: state.offset, harmony: $('harmony-content').textContent, details: intervals });
+  return RUNTIME.resultText({ summary, ratios: $('ratio-legend').textContent, offset: state.offset, harmony: $('harmony-content').textContent, details: intervals, mode: state.analysisMethod });
 }
 async function copyResult() {
   if (!state.result) return;
@@ -638,6 +678,10 @@ $('own-preview').addEventListener('click',()=>preview('own'));
 $('analyze-button').addEventListener('click',analyzePair);
 $('cancel-analysis').addEventListener('click',cancelAnalysis);
 $('start-live').addEventListener('click',startLive);
+document.querySelectorAll('input[name="listening-method"]').forEach(input => input.addEventListener('change', () => {
+  state.listeningMethod = input.value;
+  updateListeningMethod();
+}));
 $('stop-live').addEventListener('click',()=>finishLive());
 $('play-results').addEventListener('click',()=>playResult());
 $('stop-results').addEventListener('click',stopPlayback);
@@ -652,6 +696,7 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',redr
 document.querySelectorAll('details').forEach(node=>node.addEventListener('toggle',redraw));
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&state.live)finishLive(RUNTIME.backgrounded);});
 window.addEventListener('pagehide',()=>{ state.navigationVersion++; dispose(); });
-window.harmonyDiagnostics=()=>({sampleRate:state.context?.sampleRate,timings:state.timing,microphoneSettings:state.lastMicSettings,frameCounts:{reference:state.referenceFrames.length,own:state.ownFrames.length},microphoneActive:Boolean(state.live||state.pendingStream),screen:state.screen});
+window.harmonyDiagnostics=()=>({sampleRate:state.context?.sampleRate,timings:state.timing,microphoneSettings:state.lastMicSettings,listeningMethod:state.live?.listeningMethod||state.analysisMethod,selectedListeningMethod:state.listeningMethod,speakerExclusions:state.ownFrames.reduce((counts,frame)=>{if(frame.reason)counts[frame.reason]=(counts[frame.reason]||0)+1;return counts;},{}),frameCounts:{reference:state.referenceFrames.length,own:state.ownFrames.length},microphoneActive:Boolean(state.live||state.pendingStream),screen:state.screen});
 updateButtons();
+updateListeningMethod();
 redraw();
