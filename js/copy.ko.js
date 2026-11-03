@@ -39,11 +39,11 @@ export const COPY = Object.freeze({
   "headphonesModeLabel": "이어폰 모드",
   "fileModeLabel": "파일 두 개 비교",
   "speakerOwnPlayback": "내 녹음(기준 소리 포함)",
-  "speakerTip": "기준 소리는 작게 틀고, 내 목소리는 기준보다 크게 불러 주세요. 기준과 같은 음이나 옥타브로 부르는 부분은 스피커 소리와 구분할 수 없어 ‘판별 어려움’으로 표시돼요. 아직 시험 중인 기능이에요.",
+  "speakerTip": "기준 소리는 작게 틀고, 내 목소리는 편안하게 들릴 만큼 불러 주세요. 같은 음·옥타브처럼 기준 소리와 구분하기 어려운 부분은 보류하도록 설계한 실험 기능이에요. 블루투스나 긴 잔향에서는 판별이 어렵거나 잘못된 결과가 나올 수 있어요.",
   "headphonesTip": "기준 소리가 마이크에 섞이지 않도록 이어폰으로 들어 주세요. 같은 음·옥타브도 비교할 수 있지만, 배음 오인이나 입력 상태에 따른 추정 오류는 생길 수 있어요.",
-  "speakerReferenceOnly": "기준 소리와 구분할 목소리 후보를 찾지 못했어요. 조금 더 크게 불러 보거나 기준 소리를 줄여 주세요.",
-  "speakerLiveCaution": "기준 음·배음과 겹치는 후보는 제외해요. 같은 음·옥타브도 판별이 어려울 수 있으며, 남은 후보가 내 목소리라고 보장할 수는 없어요.",
-  "speakerResultNotice": "스피커 모드는 실험 기능이에요. 기준 음·배음과 겹쳐 구분할 수 없는 후보를 제외했어요. 실제로 같은 음·옥타브를 불렀다는 판정은 아니에요. 걸러낸 것은 분석 후보이며, 재생할 내 녹음에는 마이크에 들어온 기준 소리가 함께 남아요. 목소리만 분리한 음원은 만들지 않아요. 실제 사람 노래와 아이폰 스피커 효과는 미검증이에요.",
+  "speakerReferenceOnly": "내 목소리의 음높이를 비교할 근거가 부족해요. 편안하게 소리를 내거나 기준 소리를 줄여 보세요.",
+  "speakerLiveCaution": "기준 성분을 줄인 뒤 소리가 부족하거나 두 소리를 구분하기 어려우면 보류해요. 남은 후보가 내 목소리라고 보장할 수 없고, 블루투스·긴 잔향에서는 잘못 판별될 수 있어요.",
+  "speakerResultNotice": "스피커 모드는 실험 기능이에요. 남은 소리의 부족, 기준 음·배음과의 겹침 등으로 보류한 이유를 자세히에서 나눠 보여줘요. 예전에 기준 녹음에 나온 음을 내 파트로 불러도 보류될 수 있어요. 보류 비율은 실제 같은 음·옥타브의 비율이나 목소리 유무를 뜻하지 않아요. 내 녹음 재생에는 마이크에 들어온 기준 소리도 남으며, 목소리만 분리한 음원은 만들지 않아요. 블루투스·긴 잔향에서는 잘못된 결과가 나올 수 있고, 실제 사람 노래와 아이폰 스피커 효과는 미검증이에요.",
   "micPrivacy": "정지 후에도 결과를 다시 들을 수 있도록 소리를 메모리에 두어요. 홈·다시 하기·페이지 종료 시 앱의 녹음 참조를 해제해요.",
   "startLive": "마이크 허용하고 시작",
   "analyze": "두 녹음 분석하기",
@@ -244,7 +244,17 @@ export const RUNTIME = Object.freeze({
   detailsScale: '피아노 건반처럼 반음을 똑같이 나눈 기준(12평균율)과 두 목소리의 간격을 비교했어요. 센트(c)는 반음의 1/100 단위이며, 가장 가까운 반음 간격과 차이가 ±15c 이내면 맞음, 15–35c는 조금 벗어남, 35c 초과는 벗어남으로 분류해요. 이 경계값은 실제 노래에 맞춰 조정해 나갈 초기 기준이에요.',
   detailsNotice: '매 순간 두 음의 간격을 가장 가까운 12평균율 반음 간격과 비교해요. 간격의 유지나 협화성, 의도한 파트의 정답을 판단하지는 않아요. 기본음 대신 배음을 고르면 신뢰도가 높아도 간격·화성 해석이 틀릴 수 있어요. 음이름은 악보의 이명동음 표기와 다를 수 있어요.',
   tableHeaders: Object.freeze(['간격', '평균 편차', '분석 시간']),
-  speakerDetails: ({ totalFrames = 0, overlapFrames = 0, referenceOnlyFrames = 0, uncertainFrames = 0 } = {}) => `스피커 분석 조각(프레임) ${totalFrames}개 중 기준 음·배음과 겹쳐 구분할 수 없는 후보 제외: ${overlapFrames + referenceOnlyFrames}개(${totalFrames > 0 ? ((overlapFrames + referenceOnlyFrames) / totalFrames * 100).toFixed(1) : '0.0'}%). 그중 겹치는 후보로 보류: ${overlapFrames}개, 기준 주변 후보만 남아 보류: ${referenceOnlyFrames}개예요. 신뢰도가 부족해 보류한 조각은 ${uncertainFrames}개예요. 각 수치는 분석 처리 이유이며, 실제로 같은 음·옥타브를 부른 비율이나 기준 소리가 제거된 비율이 아니에요.`,
+  speakerDelayNotice: maxDelaySeconds => `이 버전은 기준 소리가 최대 ${maxDelaySeconds}초 늦게 들어오는 범위를 다뤄요. 이 범위 안의 정확도를 보장하거나, 범위 밖 지연을 모두 알아낸다는 뜻은 아니에요. 블루투스·긴 잔향에서는 판별이 어렵거나 잘못될 수 있어요.`,
+  speakerDetails: ({ totalFrames = 0, reasons = {}, residualInsufficientFrames, referenceOnlyFrames = 0, overlapFrames, lowerFundamentalAmbiguousFrames, delayUnsupportedFrames, referenceUnavailableFrames, uncertainFrames, otherHeldFrames = 0 } = {}) => {
+    const residual = residualInsufficientFrames ?? reasons['residual-insufficient'] ?? referenceOnlyFrames;
+    const overlap = overlapFrames ?? reasons['reference-overlap'] ?? 0;
+    const lower = lowerFundamentalAmbiguousFrames ?? reasons['lower-fundamental-ambiguous'] ?? 0;
+    const delay = delayUnsupportedFrames ?? reasons['delay-unsupported'] ?? 0;
+    const reference = referenceUnavailableFrames ?? reasons['reference-unavailable'] ?? 0;
+    const uncertain = uncertainFrames ?? reasons.uncertain ?? 0;
+    const held = residual + overlap + lower + delay + reference + uncertain + otherHeldFrames;
+    return `스피커 분석 조각(프레임) ${totalFrames}개 중 보류: ${held}개(${totalFrames > 0 ? (held / totalFrames * 100).toFixed(1) : '0.0'}%). 기준 성분을 줄인 뒤 남은 소리가 부족해 보류: ${residual}개. 추정 후보가 기준 음·배음과 겹쳐 보류: ${overlap}개. 더 낮은 기본음 가능성을 구분하기 어려워 보류: ${lower}개. 과거 기준 소리와 비슷해 지연된 누출인지 구분하기 어려워 보류: ${delay}개. 기준 정보가 부족해 보류: ${reference}개. 신호·주기성 근거가 부족해 보류: ${uncertain}개.${otherHeldFrames ? ` 그 밖의 이유로 보류: ${otherHeldFrames}개.` : ''} 각 수치는 분석 처리 이유이며, 실제 같은 음·옥타브의 비율이나 목소리가 없다는 판정이 아니에요. 기준 소리가 제거된 비율로도 해석하지 마세요.`;
+  },
   interval: '간격',
   commonIntervals: intervals => `자주 추정된 간격: ${intervals} · 어떤 간격이 많이 나왔는지를 보여줘요. 협화성은 별도의 화성 참고 의견과 함께 살펴보세요.`,
   segmentFallback: (interval, status, width) => `${interval === status ? status : `${interval} · ${status}`}${Number.isFinite(width) ? ` · ${Math.abs(width).toFixed(1)}c ${width >= 0 ? '넓어요' : '좁아요'}` : ''}`,

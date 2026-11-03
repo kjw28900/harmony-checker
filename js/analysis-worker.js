@@ -7,7 +7,7 @@ self.onmessage = async ({ data }) => {
     const reference = await analyzeSamples(data.reference, data.sampleRate, {
       onProgress: progress => self.postMessage({ type: 'progress', progress: progress * 0.5 }),
     });
-    const options = { onProgress: progress => self.postMessage({ type: 'progress', progress: 0.5 + progress * 0.5 }) };
+    const options = { referenceSamples: data.reference, onProgress: progress => self.postMessage({ type: 'progress', progress: 0.5 + progress * 0.5 }) };
     const own = data.listeningMethod === 'speaker'
       ? await analyzeSpeakerSamples(data.own, data.sampleRate, reference, options)
       : await analyzeSamples(data.own, data.sampleRate, options);

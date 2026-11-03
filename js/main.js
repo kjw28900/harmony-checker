@@ -4,7 +4,7 @@ import { analyzeSamples } from './core/analysis.js';
 import { compareFrames, compareTracks } from './core/compare.js';
 import { noteName } from './core/music.js';
 import { CONFIG } from './core/config.js';
-import { detectSpeakerPitch, analyzeSpeakerSamples, referenceFrequenciesAt } from './core/speaker.js';
+import { SPEAKER_CONFIG, createSpeakerReference, detectSpeakerPitch, analyzeSpeakerSamples, referenceFrequenciesAt } from './core/speaker.js';
 
 const $ = id => document.getElementById(id);
 const SAMPLE_RATE = 16000;
@@ -93,7 +93,9 @@ function chooseMode(mode) {
 }
 function updateListeningMethod() {
   document.querySelectorAll('input[name="listening-method"]').forEach(input => { input.checked = input.value === state.listeningMethod; });
-  text('listening-hint', state.listeningMethod === 'speaker' ? COPY.speakerTip : COPY.headphonesTip);
+  text('listening-hint', state.listeningMethod === 'speaker'
+    ? `${COPY.speakerTip} ${RUNTIME.speakerDelayNotice(SPEAKER_CONFIG.maxDelaySeconds)}`
+    : COPY.headphonesTip);
 }
 function updateButtons() {
   const busy = state.analyzing || Boolean(state.worker) || state.preparing || state.reading.size > 0;
@@ -238,7 +240,7 @@ async function analyzePair() {
       if (state.worker) { state.worker.terminate(); state.worker = null; }
       const signal = { get aborted() { return token !== state.generation; } };
       const reference = await analyzeSamples(state.reference.samples, SAMPLE_RATE, { signal, onProgress: p => setProgress(p / 2) });
-      const options = { signal, onProgress: p => setProgress(0.5 + p / 2) };
+      const options = { signal, onProgress: p => setProgress(0.5 + p / 2), referenceSamples: state.reference.samples };
       const own = listeningMethod === 'speaker'
         ? await analyzeSpeakerSamples(state.own.samples, SAMPLE_RATE, reference, options)
         : await analyzeSamples(state.own.samples, SAMPLE_RATE, options);
@@ -306,6 +308,7 @@ async function startLive() {
     if (token !== state.generation) { stream.getTracks().forEach(track => track.stop()); return; }
     await context.audioWorklet.addModule(new URL('./audio-capture.js', import.meta.url));
     if (token !== state.generation) { stream.getTracks().forEach(track => track.stop()); return; }
+    const speakerReference = listeningMethod === 'speaker' ? createSpeakerReference(state.reference.samples, SAMPLE_RATE) : null;
     const startTime = context.currentTime + 0.2;
     const source = context.createMediaStreamSource(stream);
     const filter = context.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 3500; filter.Q.value = 0.707;
@@ -315,7 +318,7 @@ async function startLive() {
     const referenceSource = context.createBufferSource();
     referenceSource.buffer = audioBuffer(state.reference, context);
     referenceSource.connect(context.destination);
-    live = { stream, source, filter, worklet, mute, referenceSource, startTime, listeningMethod, referenceOnlySince: null, chunks: [], total: 0, ring: new Float32Array(2048), history: [], timings: [], finishing: false, resolveDone: null, raf: null, settings: stream.getAudioTracks()[0].getSettings() };
+    live = { stream, source, filter, worklet, mute, referenceSource, speakerReference, startTime, listeningMethod, referenceOnlySince: null, chunks: [], total: 0, ring: new Float32Array(2048), history: [], timings: [], finishing: false, resolveDone: null, raf: null, settings: stream.getAudioTracks()[0].getSettings() };
     $('stop-live').disabled = false;
     state.live = live; state.preparing = false; state.pendingStream = null;
     worklet.port.onmessage = ({ data }) => {
@@ -329,10 +332,10 @@ async function startLive() {
       const receivedAt = performance.now();
       const endTime = data.endTime - startTime;
       const pitch = listeningMethod === 'speaker'
-        ? detectSpeakerPitch(live.ring, SAMPLE_RATE, { referenceFrequencies: referenceFrequenciesAt(state.referenceFrames, endTime) })
+        ? detectSpeakerPitch(live.ring, SAMPLE_RATE, { referenceContext: live.speakerReference, windowEndTime: endTime, referenceFrequencies: referenceFrequenciesAt(state.referenceFrames, endTime) })
         : detectPitch(live.ring, SAMPLE_RATE);
       const own = { ...pitch, time: Math.max(0, endTime - live.ring.length / SAMPLE_RATE / 2) };
-      if (listeningMethod === 'speaker' && ['reference-only', 'reference-overlap'].includes(own.reason)) live.referenceOnlySince ??= own.time;
+      if (listeningMethod === 'speaker' && ['residual-insufficient', 'reference-overlap'].includes(own.reason)) live.referenceOnlySince ??= own.time;
       else live.referenceOnlySince = null;
       const ref = nearestFrame(state.referenceFrames, own.time);
       const comparison = compareFrames(ref, own);
@@ -396,6 +399,7 @@ function cleanupLive(live) {
   live.stream.getTracks().forEach(track => { track.onended = null; track.stop(); });
   [live.source, live.filter, live.worklet, live.mute, live.referenceSource].forEach(node => { try { node.disconnect(); } catch {} });
   live.worklet.port.close();
+  live.speakerReference = null;
   if (state.live === live) state.live = null;
 }
 async function finishLive(reason = '') {
@@ -524,12 +528,13 @@ function renderDetails(stats) {
   node.append(element('p', RUNTIME.detailsNotice));
   if (state.analysisMethod === 'speaker') {
     const frames = state.ownFrames;
-    const count = reason => frames.filter(frame => frame.reason === reason).length;
+    const reasons = frames.reduce((counts, frame) => {
+      if (frame.reason) counts[frame.reason] = (counts[frame.reason] || 0) + 1;
+      return counts;
+    }, {});
     node.prepend(element('p', COPY.speakerResultNotice), element('p', RUNTIME.speakerDetails({
       totalFrames: frames.length,
-      overlapFrames: count('reference-overlap'),
-      referenceOnlyFrames: count('reference-only'),
-      uncertainFrames: count('uncertain'),
+      reasons,
     })));
   }
   const values = Array.isArray(stats) ? stats : Object.values(stats || {});
