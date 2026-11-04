@@ -116,11 +116,14 @@ export function recentReferenceComponents(context, endTime, { historySeconds = 1
     const frame = context.frames[index];
     for (const peak of frame.peaks) {
       if (peak.amplitude < frame.peaks[0].amplitude * 0.003) continue;
-      if (!components.some(component => Math.abs(cents(component.frequency, peak.frequency)) < 5)) components.push(peak);
-      if (components.length > maxComponents) return components;
+      const existing = components.findIndex(component => Math.abs(cents(component.frequency, peak.frequency)) < 5);
+      if (existing < 0) components.push(peak);
+      else if (peak.amplitude > components[existing].amplitude) components[existing] = peak;
     }
   }
-  return components;
+  // Real sung references (vibrato, many partials, breath noise) produce far more distinct peaks
+  // than synthetic tones. Keep the strongest ones instead of abandoning the frame entirely.
+  return components.sort((a, b) => b.amplitude - a.amplitude).slice(0, maxComponents);
 }
 
 export function spectralAmplitude(samples, frequency, sampleRate) {

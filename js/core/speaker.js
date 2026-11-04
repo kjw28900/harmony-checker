@@ -13,13 +13,14 @@ export const SPEAKER_CONFIG = Object.freeze({
   historyMergeCents: 15,
   maxReferenceFrequencies: 8,
   maxHarmonics: 16,
-  maxRecentSpectralComponents: 64,
+  maxRecentSpectralComponents: 128,
   maxSuppressionFrequency: 3500,
   projectionPasses: 2,
   minResidualEnergyFraction: 0.025,
   minResidualConfidence: 0.94,
+  halfWindowMinConfidence: 0.8,
   minFundamentalFraction: 0.1,
-  maxHalfWindowDifferenceCents: 35,
+  maxHalfWindowDifferenceCents: 70,
   lowerFundamentalAmplitudeRatio: 0.008,
   lowerFundamentalAbsoluteAmplitude: 0.0005,
   analysisTargetRms: 0.1,
@@ -213,8 +214,9 @@ export function detectSpeakerPitch(input, inputRate, { referenceFrequencies = []
   diagnostics.fundamentalFraction = fundamentalFraction(residual, pitch.frequency, sampleRate, residualRms * residualRms);
   if (diagnostics.fundamentalFraction < config.minFundamentalFraction) { diagnostics.stage = 'candidate-fundamental-weak'; return unknown('uncertain', pitch.confidence); }
   const midpoint = Math.floor(residual.length / 2);
-  const first = detectPitch(residual.subarray(0, midpoint), sampleRate);
-  const last = detectPitch(residual.subarray(midpoint), sampleRate);
+  const halfOptions = { minConfidence: config.halfWindowMinConfidence, yinThreshold: 1 - config.halfWindowMinConfidence };
+  const first = detectPitch(residual.subarray(0, midpoint), sampleRate, halfOptions);
+  const last = detectPitch(residual.subarray(midpoint), sampleRate, halfOptions);
   if (!first.voiced || !last.voiced) { diagnostics.stage = 'half-window-unvoiced'; return unknown('uncertain', pitch.confidence); }
   diagnostics.halfWindowDifferenceCents = Math.abs(cents(first.frequency, last.frequency));
   if (diagnostics.halfWindowDifferenceCents > config.maxHalfWindowDifferenceCents) { diagnostics.stage = 'half-window-disagreement'; return unknown('uncertain', pitch.confidence); }
